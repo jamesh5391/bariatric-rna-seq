@@ -1,12 +1,3 @@
-"""
-Create a comprehensive comparison table of gene set enrichment results
-from multiple methods (clusterProfiler, gprofiler2, topGO).
-
-This script combines results from all three methods into a single table
-where each row represents a unique gene set/term and columns show results
-from each method along with summary statistics.
-"""
-
 import pandas as pd
 import numpy as np
 import os
@@ -94,9 +85,36 @@ def load_topgo_results(file_path):
     
     return result
 
-def create_comparison_table(clusterprofiler_file, gprofiler2_file, topgo_file, significance_threshold=0.05):
+def load_gseapy_results(file_path):
+    """Load and process GSEAPY results."""
+    df = pd.read_csv(file_path)
+    
+    # Extract GO ID from Term column (format: "Term Name (GO:1234567)")
+    df['go_id'] = df['Term'].str.extract(r'\(GO:(\d+)\)')[0]
+    df['go_id'] = 'GO:' + df['go_id'].astype(str)
+    
+    # Extract term name without GO ID
+    df['term_name_clean'] = df['Term'].str.replace(r'\s*\(GO:\d+\)$', '', regex=True)
+    
+    result = pd.DataFrame({
+        'term_id': df['go_id'],
+        'term_name': df['term_name_clean'],
+        'gseapy_pvalue': df['P-value'],
+        'gseapy_adjusted_pvalue': df['Adjusted P-value'],
+        'gseapy_odds_ratio': df['Odds Ratio'],
+        'gseapy_combined_score': df['Combined Score'],
+        'gseapy_overlap': df['Overlap'],
+        'gseapy_genes': df['Genes']
+    })
+    
+    # Add significance flag (typically adjusted p-value < 0.05)
+    result['gseapy_significant'] = result['gseapy_adjusted_pvalue'] < 0.05
+    
+    return result
+
+def create_comparison_table(clusterprofiler_file, gprofiler2_file, topgo_file, gseapy_file, significance_threshold=0.05):
     """
-    Create comprehensive comparison table combining all three methods.
+    Create comprehensive comparison table combining all four methods.
     """
     print("Loading results from each method...")
     
@@ -104,16 +122,19 @@ def create_comparison_table(clusterprofiler_file, gprofiler2_file, topgo_file, s
     cp_results = load_clusterprofiler_results(clusterprofiler_file)
     gp_results = load_gprofiler2_results(gprofiler2_file)
     tg_results = load_topgo_results(topgo_file)
+    gs_results = load_gseapy_results(gseapy_file)
     
     print(f"Loaded {len(cp_results)} clusterProfiler results")
     print(f"Loaded {len(gp_results)} gprofiler2 results")
     print(f"Loaded {len(tg_results)} topGO results")
+    print(f"Loaded {len(gs_results)} GSEAPY results")
     
     # Get all unique terms across all methods
     all_terms = set()
     all_terms.update(cp_results['term_id'].dropna())
     all_terms.update(gp_results['term_id'].dropna())
     all_terms.update(tg_results['term_id'].dropna())
+    all_terms.update(gs_results['term_id'].dropna())
     
     print(f"Found {len(all_terms)} unique terms across all methods")
     
@@ -124,10 +145,11 @@ def create_comparison_table(clusterprofiler_file, gprofiler2_file, topgo_file, s
     master_df = master_df.merge(cp_results, on='term_id', how='left', suffixes=('', '_cp'))
     master_df = master_df.merge(gp_results, on='term_id', how='left', suffixes=('', '_gp'))
     master_df = master_df.merge(tg_results, on='term_id', how='left', suffixes=('', '_tg'))
+    master_df = master_df.merge(gs_results, on='term_id', how='left', suffixes=('', '_gs'))
     
     # Resolve term names (use the first non-null name found)
     def get_best_term_name(row):
-        for col in ['term_name', 'term_name_gp', 'term_name_tg']:
+        for col in ['term_name', 'term_name_gp', 'term_name_tg', 'term_name_gs']:
             if col in row and pd.notna(row[col]):
                 return row[col]
         return 'Unknown'
@@ -139,18 +161,21 @@ def create_comparison_table(clusterprofiler_file, gprofiler2_file, topgo_file, s
     master_df['methods_total'] = (
         (~master_df['clusterprofiler_pvalue'].isna()).astype(int) +
         (~master_df['gprofiler2_pvalue'].isna()).astype(int) +
-        (~master_df['topgo_pvalue'].isna()).astype(int)
+        (~master_df['topgo_pvalue'].isna()).astype(int) +
+        (~master_df['gseapy_pvalue'].isna()).astype(int)
     )
     
     # Methods that found this term significantly enriched
     cp_sig = master_df['clusterprofiler_significant'].fillna(False)
     gp_sig = master_df['gprofiler2_significant'].fillna(False)
     tg_sig = master_df['topgo_significant_flag'].fillna(False)
+    gs_sig = master_df['gseapy_significant'].fillna(False)
     
     master_df['methods_significant'] = (
         cp_sig.astype(int) +
         gp_sig.astype(int) +
-        tg_sig.astype(int)
+        tg_sig.astype(int) +
+        gs_sig.astype(int)
     )
     
     # Reorganize columns for better readability
@@ -163,7 +188,9 @@ def create_comparison_table(clusterprofiler_file, gprofiler2_file, topgo_file, s
         'gprofiler2_intersection_size', 'gprofiler2_precision', 'gprofiler2_recall',
         'topgo_pvalue', 'topgo_pvalue_raw', 'topgo_significant_flag',
         'topgo_annotated', 'topgo_significant', 'topgo_expected',
-        'clusterprofiler_genes'
+        'gseapy_pvalue', 'gseapy_adjusted_pvalue', 'gseapy_significant',
+        'gseapy_odds_ratio', 'gseapy_combined_score', 'gseapy_overlap',
+        'clusterprofiler_genes', 'gseapy_genes'
     ]
     
     # Keep only columns that exist
@@ -177,7 +204,7 @@ def create_comparison_table(clusterprofiler_file, gprofiler2_file, topgo_file, s
     })
     
     # Sort by number of methods finding significance (descending), then by best p-value
-    result_df['min_pvalue'] = result_df[['clusterprofiler_pvalue', 'gprofiler2_pvalue', 'topgo_pvalue']].min(axis=1)
+    result_df['min_pvalue'] = result_df[['clusterprofiler_pvalue', 'gprofiler2_pvalue', 'topgo_pvalue', 'gseapy_pvalue']].min(axis=1)
     result_df = result_df.sort_values(['methods_significant', 'methods_total', 'min_pvalue'], 
                                      ascending=[False, False, True])
     
@@ -196,9 +223,10 @@ def main():
     clusterprofiler_file = results_dir / "clusterProfiler_enrichment_results.csv"
     gprofiler2_file = results_dir / "gprofiler2_enrichment_results.csv"
     topgo_file = results_dir / "topGO_enrichment_results.csv"
+    gseapy_file = results_dir / "enrichment_gseapy_gene_ontology.csv"
     
     # Check if all files exist
-    for file_path in [clusterprofiler_file, gprofiler2_file, topgo_file]:
+    for file_path in [clusterprofiler_file, gprofiler2_file, topgo_file, gseapy_file]:
         if not file_path.exists():
             print(f"Error: File not found - {file_path}")
             return
@@ -210,7 +238,8 @@ def main():
     comparison_df = create_comparison_table(
         clusterprofiler_file, 
         gprofiler2_file, 
-        topgo_file
+        topgo_file,
+        gseapy_file
     )
     
     # Save results
@@ -225,11 +254,13 @@ def main():
     print("SUMMARY STATISTICS")
     print("=" * 60)
     
-    print(f"Terms found by all 3 methods: {len(comparison_df[comparison_df['methods_total'] == 3])}")
+    print(f"Terms found by all 4 methods: {len(comparison_df[comparison_df['methods_total'] == 4])}")
+    print(f"Terms found by 3 methods: {len(comparison_df[comparison_df['methods_total'] == 3])}")
     print(f"Terms found by 2 methods: {len(comparison_df[comparison_df['methods_total'] == 2])}")
     print(f"Terms found by 1 method: {len(comparison_df[comparison_df['methods_total'] == 1])}")
     
-    print(f"\nTerms significant in all 3 methods: {len(comparison_df[comparison_df['methods_significant'] == 3])}")
+    print(f"\nTerms significant in all 4 methods: {len(comparison_df[comparison_df['methods_significant'] == 4])}")
+    print(f"Terms significant in 3 methods: {len(comparison_df[comparison_df['methods_significant'] == 3])}")
     print(f"Terms significant in 2 methods: {len(comparison_df[comparison_df['methods_significant'] == 2])}")
     print(f"Terms significant in 1 method: {len(comparison_df[comparison_df['methods_significant'] == 1])}")
     print(f"Terms not significant in any method: {len(comparison_df[comparison_df['methods_significant'] == 0])}")
@@ -242,7 +273,7 @@ def main():
     consensus_results = comparison_df[comparison_df['methods_significant'] >= 2].head(10)
     if len(consensus_results) > 0:
         display_cols = ['term_id', 'term_name', 'methods_significant', 'methods_total',
-                       'clusterprofiler_pvalue', 'gprofiler2_pvalue', 'topgo_pvalue']
+                       'clusterprofiler_pvalue', 'gprofiler2_pvalue', 'topgo_pvalue', 'gseapy_pvalue']
         available_display_cols = [col for col in display_cols if col in consensus_results.columns]
         print(consensus_results[available_display_cols].to_string(index=False))
     else:
@@ -270,6 +301,12 @@ def main():
     if len(tg_only) > 0:
         print(f"\ntopGO-specific (top 5):")
         print(tg_only[['term_id', 'term_name', 'topgo_pvalue']].head().to_string(index=False))
+    
+    gs_only = comparison_df[(comparison_df['gseapy_significant'] == True) & 
+                           (comparison_df['methods_significant'] == 1)]
+    if len(gs_only) > 0:
+        print(f"\nGSEAPY-specific (top 5):")
+        print(gs_only[['term_id', 'term_name', 'gseapy_pvalue']].head().to_string(index=False))
 
     print(f"\n" + "=" * 60)
     print("Analysis complete! Check the output file for the full comparison table.")
