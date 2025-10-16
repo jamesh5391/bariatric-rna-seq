@@ -1,0 +1,11 @@
+Group 1,Group 2,Chi-squared statistic,p-value,Adjusted p-value
+10 genes,100 genes,1197.778,2.62E-90,5.24E-90
+10 genes,1000 genes,1117.6,2.76E-78,3.31E-78
+10 genes,"10,000 genes",1016.156,1.18E-63,1.18E-63
+100 genes,1000 genes,1404.578,7.98E-123,4.79E-122
+100 genes,"10,000 genes",1172.209,1.98E-86,2.97E-86
+1000 genes,"10,000 genes",1393.333,5.23E-121,1.57E-120
+10 genes,Timepoints (T0/T3),19.699,5.28E-05,1.06E-04
+100 genes,Timepoints (T0/T3),5,8.21E-02,8.21E-02
+1000 genes,Timepoints (T0/T3),22.423,1.35E-05,5.41E-05
+"10,000 genes",Timepoints (T0/T3),14.808,6.09E-04,8.12E-04
