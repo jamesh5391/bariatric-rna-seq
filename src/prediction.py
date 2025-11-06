@@ -150,6 +150,7 @@ def training_adj_gene_count(model):
 
 
 training_adj_gene_count(grid_search_lr)
+training_adj_gene_count(grid_search_rf)
 
 
 
