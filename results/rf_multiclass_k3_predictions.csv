@@ -1,4 +1,4 @@
-sample_id,true_cluster,pred_cluster_rf
+Sample,true_cluster,rf_pred_cluster
 SRR1785241,0,0
 SRR1785312,0,0
 SRR1785263,0,0

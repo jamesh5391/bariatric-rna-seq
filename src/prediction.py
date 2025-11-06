@@ -53,6 +53,17 @@ best_model_lr = grid_search_lr.best_estimator_
 y_test_pred_lr = best_model_lr.predict(X_test)
 print(classification_report(y_test, y_test_pred_lr))
 
+
+# Save true and predicted labels with sample IDs to CSV for logistic regression group prediction
+logreg_group_pred_df = pd.DataFrame({
+    'Sample': X_test.index,
+    'True_Label': y_test.values,
+    'Pred_Label_LR': y_test_pred_lr
+})
+
+logreg_group_pred_df.to_csv('../results/logreg_group_predictions.csv', index=False)
+
+
 ## Logistic Regression: Cell 4 (Predict clusters)
 
 from sklearn.cluster import AgglomerativeClustering
@@ -71,6 +82,14 @@ grid_search_lr.fit(X_train, y_train_c)
 model_lr = grid_search_lr.best_estimator_
 y_test_pred_cluster = model_lr.predict(X_test)
 print(classification_report(y_test_c, y_test_pred_cluster))
+
+# Save cluster label predictions, true cluster labels, and sample IDs to CSV
+cluster_pred_df = pd.DataFrame({
+    'Sample': X_test.index,
+    'True_Cluster': y_test_c,
+    'lr_pred_cluster': y_test_pred_cluster
+})
+cluster_pred_df.to_csv('../results/logreg_cluster_predictions.csv', index=False)
 
 ## Random Forest: Cell 1
 
@@ -125,6 +144,8 @@ def training_adj_gene_count(model):
 
         auc = roc_auc_score(y_test, y_test_score, multi_class='ovr')
         print(f"AUC for top {n_genes} genes: {auc}\n")
+
+        
 
 
 
