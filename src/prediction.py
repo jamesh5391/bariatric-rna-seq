@@ -26,7 +26,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import GridSearchCV
 
 X_train, X_test, y_train, y_test = train_test_split(top_variable_expression, target['Group'], 
-                                                    test_size=0.2, random_state=0, 
+                                                    test_size=0.3, random_state=0, 
                                                     stratify=target['Group'])
 ## Logistic Regression: Cell 1
 
@@ -73,19 +73,25 @@ agglo = AgglomerativeClustering(n_clusters=k)
 cluster_labels = agglo.fit_predict(top_variable_expression)
 
 
-X_train, X_test, y_train_c, y_test_c = train_test_split(top_variable_expression, cluster_labels, 
-                                                    test_size=0.2, random_state=0, 
-                                                    stratify=cluster_labels)
+# Use distinct variable names for the cluster-based split so we don't overwrite
+# the original X_train/X_test/y_train/y_test used for the group prediction tasks.
+X_train_c, X_test_c, y_train_c, y_test_c = train_test_split(
+    top_variable_expression,
+    cluster_labels,
+    test_size=0.3,
+    random_state=0,
+    stratify=cluster_labels
+)
 
 ## Logistic Regression: Cell 5 (Model training)
-grid_search_lr.fit(X_train, y_train_c)
+grid_search_lr.fit(X_train_c, y_train_c)
 model_lr = grid_search_lr.best_estimator_
-y_test_pred_cluster = model_lr.predict(X_test)
+y_test_pred_cluster = model_lr.predict(X_test_c)
 print(classification_report(y_test_c, y_test_pred_cluster))
 
 # Save cluster label predictions, true cluster labels, and sample IDs to CSV
 cluster_pred_df = pd.DataFrame({
-    'Sample': X_test.index,
+    'Sample': X_test_c.index,
     'True_Cluster': y_test_c,
     'lr_pred_cluster': y_test_pred_cluster
 })
@@ -131,7 +137,7 @@ def training_adj_gene_count(model):
         top_n_genes = gene_variances.sort_values(ascending=False).head(n_genes).index
         top_n_expression = expression_data.loc[top_n_genes].T
         X_train, X_test, y_train, y_test = train_test_split(top_n_expression, target['Group'], 
-                                                            test_size=0.2, random_state=0, 
+                                                            test_size=0.3, random_state=0, 
                                                         stratify=target['Group'])
         
         model.fit(X_train, y_train)
